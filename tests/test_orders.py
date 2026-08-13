@@ -146,3 +146,59 @@ def test_get_order_success():
 
     finally:
         app.dependency_overrides.clear()
+
+def test_upload_returns_422_when_extraction_fails(monkeypatch):
+    mock_create_order = AsyncMock(
+        side_effect=ValueError(
+            "Required patient information could not be extracted"
+        )
+    )
+
+    monkeypatch.setattr(
+        "routers.orders.create_order_from_document",
+        mock_create_order,
+    )
+
+    response = client.post(
+        "/api/v1/orders/upload",
+        files={
+            "file": (
+                "patient.pdf",
+                b"%PDF-1.4 fake pdf bytes",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Required patient information could not be extracted"
+    )
+
+def test_upload_returns_503_when_llm_unavailable(monkeypatch):
+    mock_create_order = AsyncMock(
+        side_effect=RuntimeError(
+            "Document extraction service is temporarily unavailable"
+        )
+    )
+
+    monkeypatch.setattr(
+        "routers.orders.create_order_from_document",
+        mock_create_order,
+    )
+
+    response = client.post(
+        "/api/v1/orders/upload",
+        files={
+            "file": (
+                "patient.pdf",
+                b"%PDF-1.4 fake pdf bytes",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Document extraction service is temporarily unavailable"
+    )

@@ -60,10 +60,23 @@ async def upload_order(
             detail="Only PDF files are supported",
         )
 
-    order = await create_order_from_document(
-        file=file,
-        db=db,
-    )
+    try:
+        order = await create_order_from_document(
+            file=file,
+            db=db,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        ) from exc
 
     log_activity(
         db=db,
