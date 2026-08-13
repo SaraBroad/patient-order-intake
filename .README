@@ -1,0 +1,1 @@
+I am first approaching this problem by planning for the hard requirements: A deployed FastAPI service backed by PostgreSQL that exposes versioned CRUD endpoints for Orders, accepts arbitrary patient PDF documents, extracts the required patient demographics, persists the resulting Order, and records API activity.
