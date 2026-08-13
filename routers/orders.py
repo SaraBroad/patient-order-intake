@@ -5,15 +5,24 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Order
 from schemas import OrderResponse
-# from services.document_extractor import extract_patient_data
 from services.order_service import create_order_from_document
+from services.activity_logger import log_activity
 
 router = APIRouter()
 
 
 @router.get("/", response_model=list[OrderResponse])
 def get_orders(db: Session = Depends(get_db)):
-    return db.scalars(select(Order)).all()
+    orders = db.scalars(select(Order)).all()
+
+    log_activity(
+        db=db,
+        action="ORDERS_LIST_VIEWED",
+        method="GET",
+        path="/api/v1/orders",
+    )
+
+    return orders
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
@@ -28,6 +37,14 @@ def get_order(
             status_code=404,
             detail="Order not found",
         )
+
+    log_activity(
+        db=db,
+        action="ORDER_VIEWED",
+        method="GET",
+        path=f"/api/v1/orders/{order_id}",
+        order_id=order.id,
+    )
 
     return order
 
@@ -46,6 +63,14 @@ async def upload_order(
     order = await create_order_from_document(
         file=file,
         db=db,
+    )
+
+    log_activity(
+        db=db,
+        action="ORDER_UPLOADED",
+        method="POST",
+        path="/api/v1/orders/upload",
+        order_id=order.id,
     )
 
     return order
