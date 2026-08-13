@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from schemas import OrderResponse, OrderUpdate
+from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 from models import Order
@@ -83,6 +85,54 @@ async def upload_order(
         action="ORDER_UPLOADED",
         method="POST",
         path="/api/v1/orders/upload",
+        order_id=order.id,
+    )
+
+    return order
+
+@router.patch("/{order_id}", response_model=OrderResponse)
+def update_order(
+    order_id: int,
+    payload: OrderUpdate,
+    db: Session = Depends(get_db),
+):
+    order = db.get(Order, order_id)
+
+    if order is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found",
+        )
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if not updates:
+        raise HTTPException(
+            status_code=422,
+            detail="At least one field must be provided",
+        )
+
+    if any(value is None for value in updates.values()):
+        raise HTTPException(
+            status_code=422,
+            detail="Order fields cannot be null",
+        )
+
+    for field, value in updates.items():
+        setattr(order, field, value)
+
+    try:
+        db.commit()
+        db.refresh(order)
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+    log_activity(
+        db=db,
+        action="ORDER_UPDATED",
+        method="PATCH",
+        path=f"/api/v1/orders/{order_id}",
         order_id=order.id,
     )
 
