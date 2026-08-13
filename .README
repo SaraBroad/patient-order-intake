@@ -1,12 +1,558 @@
-I am first approaching this problem by planning for the hard requirements: A deployed FastAPI service backed by PostgreSQL that exposes versioned CRUD endpoints for Orders, accepts arbitrary patient PDF documents, extracts the required patient demographics, persists the resulting Order, and records API activity.
+# GenHealth Assessment API
 
-Core MVP Endpoints
+A FastAPI service backed by PostgreSQL for creating and managing patient orders from uploaded PDF documents.
 
-1. POST /api/v1/orders/upload
-2. GET  /api/v1/orders/{order_id}
-3. GET  /api/v1/orders
+The API supports uploading a patient PDF, extracting patient demographics with an LLM, persisting orders to PostgreSQL, retrieving orders, updating existing orders, recording API activity, and exposing a public deployed API.
 
-Trade-offs
-I decided to put the patient data fields on the Order model. If I had more time, I would evaluate the need for a separate Patient model.
+## Live API
 
-In a production version, I would introduce pagination when fetching orders.
+Production API:
+
+`https://genhealth-assessment-s9gx.onrender.com`
+
+Interactive API documentation:
+
+`https://genhealth-assessment-s9gx.onrender.com/docs`
+
+Health check:
+
+`GET /health`
+
+## Tech Stack
+
+- Python
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- Pydantic
+- OpenAI API
+- Pytest
+- Render
+
+## API Endpoints
+
+### Health Check
+
+`GET /health`
+
+Returns the health status of the API.
+
+### List Orders
+
+`GET /api/v1/orders/`
+
+Returns persisted orders.
+
+### Get Order
+
+`GET /api/v1/orders/{order_id}`
+
+Returns a single order by ID.
+
+Returns `404` if the order does not exist.
+
+### Upload Patient Document
+
+`POST /api/v1/orders/upload`
+
+Accepts a PDF document and extracts:
+
+- Patient first name
+- Patient last name
+- Patient date of birth
+
+The extracted data is validated and persisted as an Order.
+
+The uploaded document may be text-based or contain scanned/image-based content.
+
+### Update Order
+
+`PATCH /api/v1/orders/{order_id}`
+
+Allows existing patient fields on an order to be updated.
+
+Supported fields include:
+
+- `patient_first_name`
+- `patient_last_name`
+- `patient_date_of_birth`
+
+Basic request validation is performed through Pydantic.
+
+Additional domain-specific validation would be a natural next step.
+
+Example request:
+
+```json
+{
+  "patient_first_name": "Marie",
+  "patient_last_name": "Curie",
+  "patient_date_of_birth": "1900-12-05"
+}
+```
+
+## Document Extraction Approach
+
+The upload endpoint sends the PDF directly to an LLM that can process document input.
+
+I chose this approach because the input document format is unknown and may include scanned or image-based PDFs. This avoids requiring a separate OCR pipeline for the initial implementation.
+
+The LLM response is parsed directly into a Pydantic model rather than relying on free-form text.
+
+This provides:
+
+- Predictable structured output
+- Type validation
+- Normalized date handling
+- A clear contract between the extraction service and the application
+
+The extraction layer also handles several common upstream-service failures, including:
+
+- Rate limiting
+- Connectivity errors
+- Timeouts
+- Inability to extract required patient information
+
+## Database Design
+
+The application uses PostgreSQL through SQLAlchemy.
+
+For the scope of this assessment, patient information is stored directly on the `Order` model.
+
+The Order currently contains:
+
+- `id`
+- `patient_first_name`
+- `patient_last_name`
+- `patient_date_of_birth`
+- `source_filename`
+- `created_at`
+- `updated_at`
+
+I chose to keep patient information directly on the Order for the time-boxed implementation because each uploaded document produces an order and the current requirements do not require independent patient management.
+
+With more time, I would consider introducing a separate `Patient` entity if the application needed:
+
+- Patient identity management
+- Deduplication
+- Multiple orders per patient
+- Patient-level workflows
+- Patient history independent of an individual order
+
+## Activity Logging
+
+API activity is persisted in an `activity_logs` table.
+
+Activity records include:
+
+- Action
+- Associated order ID when applicable
+- HTTP method
+- Request path
+- Timestamp
+- Optional user ID
+
+Examples of logged actions include:
+
+- Order list viewed
+- Order viewed
+- Order uploaded
+- Order updated
+
+The `user_id` field is currently nullable because authentication was outside the core scope of the assessment.
+
+In a production system, the authenticated user would be associated with each activity entry.
+
+## Validation and Error Handling
+
+The API includes validation and handling for several expected failure cases.
+
+Examples include:
+
+- Unsupported or non-PDF uploads
+- Missing orders
+- Missing patient information
+- Invalid request data
+- Failed LLM extraction
+- LLM rate limiting
+- LLM connectivity failures
+- LLM timeouts
+- Database transaction failures
+
+Database writes use rollback handling so a failed transaction does not leave the SQLAlchemy session in a broken state.
+
+The PATCH endpoint currently includes basic request validation. With more time, I would add stronger domain-level validation such as:
+
+- Rejecting future dates of birth
+- Trimming and normalizing names
+- Forbidding unknown fields
+- Defining fields that should become immutable
+- More explicit validation messages
+
+## Project Structure
+
+```text
+genhealth-assessment/
+├── main.py
+├── database.py
+├── models.py
+├── schemas.py
+├── routers/
+│   ├── __init__.py
+│   └── orders.py
+├── services/
+│   ├── __init__.py
+│   ├── activity_logger.py
+│   ├── document_extractor.py
+│   └── order_service.py
+├── tests/
+│   └── test_orders.py
+├── requirements.txt
+├── .gitignore
+└── README.md
+```
+
+The application is separated into API routing, database models, request/response schemas, order creation logic, document extraction, and activity logging.
+
+This keeps external-service logic and database operations from being concentrated entirely inside route handlers.
+
+## Local Setup
+
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Create a `.env` file:
+
+```text
+DATABASE_URL=<postgresql connection string>
+OPENAI_API_KEY=<OpenAI API key>
+```
+
+Secrets are provided through environment variables and are not committed to source control.
+
+Start the API:
+
+```bash
+uvicorn main:app --reload
+```
+
+Then open:
+
+`http://127.0.0.1:8000/docs`
+
+## Running Tests
+
+Run:
+
+```bash
+python -m pytest -v
+```
+
+External LLM behavior is mocked in tests so the test suite does not depend on paid API requests, LLM availability, or external network behavior.
+
+Tests currently cover several important API paths and error conditions, including:
+
+- Missing orders
+- Non-PDF uploads
+- Successful uploads
+- Order retrieval
+- Extraction failures
+- Upstream LLM failures
+
+## Deployment
+
+The API is deployed on Render and backed by PostgreSQL.
+
+Production configuration is supplied using environment variables rather than hard-coded credentials.
+
+The application currently uses SQLAlchemy metadata initialization to create missing tables.
+
+For a production application, I would replace this with explicit database migrations.
+
+# Design Decisions and Trade-offs
+
+## Direct PDF Processing With an LLM
+
+I chose to send the PDF directly to a multimodal LLM rather than first introducing an OCR dependency.
+
+This simplified the implementation while also supporting image-based or scanned PDFs.
+
+The trade-off is dependency on an external LLM provider for document processing.
+
+At larger scale, I would evaluate:
+
+- Cost
+- Latency
+- Rate limits
+- Retry behavior
+- Document privacy requirements
+- Whether a dedicated OCR/extraction pipeline would be more appropriate
+
+## Structured LLM Output
+
+I used structured Pydantic output for extracted patient information instead of parsing unstructured model text.
+
+This makes the extraction boundary more predictable and easier to validate.
+
+## Synchronous Document Processing
+
+Document extraction currently happens within the upload request.
+
+This keeps the API simple and allows the caller to immediately receive the resulting order.
+
+The trade-off is that request latency depends on the upstream LLM.
+
+At higher volume, I would move extraction to a background job and expose processing status separately.
+
+## Patient Data Stored on the Order
+
+Patient demographics are currently stored directly on the Order.
+
+This avoids unnecessary modeling complexity for the assessment.
+
+If the domain evolved to support many orders per patient or independent patient management, I would introduce a separate Patient model.
+
+## Original PDF Storage
+
+The current implementation reads the uploaded PDF in memory and stores the structured patient data and source filename.
+
+It does not persist the original PDF.
+
+If document retention were required, I would store PDFs in object storage such as S3 and persist an object reference in PostgreSQL.
+
+## Activity Logging
+
+Activity logging is persisted separately from order data.
+
+The current implementation records application activity but does not yet associate actions with authenticated users.
+
+The schema leaves room for that through the nullable `user_id`.
+
+## Database Transactions
+
+Database write failures trigger a rollback before the exception propagates.
+
+This prevents failed operations from leaving the SQLAlchemy session in a failed transaction state.
+
+For some workflows, I would also revisit transaction boundaries so related operations can be committed atomically where appropriate.
+
+## Database Migrations
+
+The assessment implementation currently uses:
+
+```python
+Base.metadata.create_all(bind=engine)
+```
+
+to initialize missing tables.
+
+This works for initial schema creation but does not safely evolve existing production schemas.
+
+For production, I would use Alembic so schema changes are:
+
+- Explicit
+- Version controlled
+- Reviewable
+- Repeatable
+- Safely deployable across environments
+
+## Delete Endpoint Trade-off
+
+During development, I began implementing a hard-delete endpoint for Orders.
+
+Because activity logs may reference an Order through a foreign key, safely deleting an Order while preserving audit history required changing the foreign-key behavior.
+
+Possible approaches include:
+
+- `ON DELETE SET NULL`
+- Soft deletion
+- Storing an immutable resource identifier rather than a strict foreign key
+- Retaining deleted resource metadata separately
+
+Changing that relationship safely would require a database migration in the deployed environment.
+
+Because the assessment was time-boxed and the deployed application was already stable, I chose not to ship a partially completed schema change late in the implementation.
+
+I prioritized preserving the reliability of the working API over adding one more endpoint without sufficient time to migrate and verify it properly.
+
+## Pagination
+
+The order list endpoint currently returns all orders.
+
+This is sufficient for the assessment dataset, but it would not scale indefinitely.
+
+In production, I would add bounded pagination so the service does not retrieve an unbounded number of rows into application memory.
+
+For very large datasets, I would likely prefer cursor/keyset pagination over large `OFFSET` queries.
+
+## Authentication and Authorization
+
+Authentication was not implemented within the assessment timebox.
+
+In production, I would add authentication and authorization before exposing patient-related functionality broadly.
+
+That would also allow activity logs to capture the actual user performing each action.
+
+## Caching
+
+I intentionally did not add caching to the current implementation.
+
+The current scale and access patterns do not justify the additional complexity of cache invalidation, stale reads, and another operational dependency.
+
+I would introduce caching only after observing real production read patterns and identifying a specific need.
+
+# What I Would Do Next
+
+Given more development time, I would prioritize the following improvements.
+
+## 1. Database Migrations
+
+Introduce Alembic and establish a repeatable migration workflow for local, staging, and production environments.
+
+This would be the first step before introducing schema-dependent features such as safe hard deletion.
+
+## 2. Complete the Delete Endpoint
+
+Finish the Order deletion workflow with an explicit decision around audit-history retention.
+
+I would evaluate:
+
+- `ON DELETE SET NULL`
+- Soft deletion
+- An immutable audit resource identifier
+
+before shipping the endpoint.
+
+## 3. Pagination
+
+Add pagination to the order list endpoint.
+
+Initially, simple bounded pagination would be sufficient.
+
+For larger datasets, I would move toward cursor/keyset pagination.
+
+## 4. Stronger PATCH Validation
+
+Expand update validation to include:
+
+- Future DOB rejection
+- Whitespace trimming
+- Name normalization
+- Unknown-field rejection
+- More detailed validation errors
+- Clearer mutability rules
+
+## 5. User Interface
+
+Add a lightweight UI for:
+
+- Uploading PDFs
+- Displaying extracted patient information
+- Reviewing orders
+- Editing order data
+- Showing extraction errors
+- Showing processing status
+
+This would allow users to interact with the application without relying on Swagger.
+
+## 6. Authentication and Authorization
+
+Introduce authenticated users and authorization rules.
+
+Activity log entries could then reliably capture who performed each action.
+
+## 7. Background Document Processing
+
+Move LLM extraction into asynchronous background processing for larger documents or higher traffic.
+
+The API could return an Order or Job in a processing state and allow clients to retrieve the result when extraction completes.
+
+## 8. Batch Upload Support
+
+Add multi-document processing with:
+
+- Bounded concurrency
+- Per-document success/failure results
+- Partial-success handling
+- Retry behavior
+- Protection against LLM rate limits
+
+## 9. Object Storage
+
+Store original PDFs in object storage such as S3 if source document retention is required.
+
+The database would store document metadata and the storage reference rather than the file itself.
+
+## 10. Rate Limiting and External-Service Resilience
+
+Add:
+
+- API-level rate limiting
+- Retry strategies where appropriate
+- Exponential backoff
+- Better upstream error classification
+- Circuit breaking if necessary
+
+## 11. Observability
+
+Introduce stronger production observability including:
+
+- Structured logging
+- Request IDs
+- Metrics
+- Tracing
+- Latency measurements
+- External-service monitoring
+- Alerting
+
+## 12. Expanded Testing
+
+Add additional integration and edge-case coverage around:
+
+- PostgreSQL behavior
+- Activity logging
+- PATCH validation
+- Migrations
+- Document extraction failures
+- Concurrent requests
+- Batch processing
+- Deployed API behavior
+
+## 13. Upload Security
+
+Harden document handling with:
+
+- File-size limits
+- Stronger MIME/type verification
+- Malformed-document handling
+- Document scanning if required
+- Additional protections for untrusted uploads
+
+# Summary
+
+The focus of this assessment was to build and deploy a functional API within a limited timeframe while keeping the implementation understandable and extensible.
+
+I prioritized:
+
+- A working public deployment
+- PostgreSQL persistence
+- Reliable PDF-to-order extraction
+- Structured LLM output
+- API validation
+- Activity logging
+- External-service error handling
+- Database rollback handling
+- Clear separation of application concerns
+- Automated tests
+
+Where broader production concerns could not reasonably fit into the timebox, I tried to make those trade-offs explicit and leave a clear path for future improvement.
