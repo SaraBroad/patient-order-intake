@@ -1,4 +1,4 @@
-from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import Order
 from services.document_extractor import extract_patient_data
@@ -19,8 +19,13 @@ async def create_order_from_document(file, db):
         source_filename=file.filename,
     )
 
-    db.add(order)
-    db.commit()
-    db.refresh(order)
+    try:
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
     return order

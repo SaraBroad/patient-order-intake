@@ -1,3 +1,5 @@
+from sqlalchemy.exc import SQLAlchemyError
+
 from models import ActivityLog
 
 
@@ -17,7 +19,12 @@ def log_activity(
         user_id=user_id,
     )
 
-    db.add(log)
-    db.commit()
+    try:
+        db.add(log)
+        db.commit()
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
     return log
