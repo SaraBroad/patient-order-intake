@@ -5,3 +5,8 @@ Core MVP Endpoints
 1. POST /api/v1/orders/upload
 2. GET  /api/v1/orders/{order_id}
 3. GET  /api/v1/orders
+
+Trade-offs
+I decided to put the patient data fields on the Order model. If I had more time, I would evaluate the need for a separate Patient model.
+
+In a production version, I would introduce pagination when fetching orders.
