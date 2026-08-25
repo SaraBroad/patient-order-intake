@@ -1,4 +1,7 @@
+import os
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
 
@@ -9,8 +12,17 @@ from routers.orders import router as orders_router
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="GenHealth Assessment API",
+    title="Patient Order Intake API",
     version="1.0.0",
+)
+
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in allowed_origins if origin.strip()],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(

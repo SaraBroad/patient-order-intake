@@ -1,4 +1,4 @@
-# GenHealth Assessment API
+# Patient Order Intake API
 
 A FastAPI service backed by PostgreSQL for creating and managing patient orders from uploaded PDF documents.
 

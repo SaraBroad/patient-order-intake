@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "patient-order-intake": {
+      "command": "/Users/sarabroad/Documents/genhealth-assessment/.venv/bin/python",
+      "args": ["mcp_server.py"],
+      "cwd": "/Users/sarabroad/Documents/genhealth-assessment",
+      "env": {
+        "BACKEND_URL": "http://localhost:8000"
+      }
+    }
+  }
+}
