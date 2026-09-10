@@ -4,16 +4,6 @@ A FastAPI service backed by PostgreSQL for creating and managing patient orders 
 
 The API supports uploading a patient PDF, extracting patient demographics with an LLM, persisting orders to PostgreSQL, retrieving orders, updating existing orders, recording API activity, and exposing a public deployed API.
 
-## Live API
-
-Production API:
-
-`https://genhealth-assessment-s9gx.onrender.com`
-
-Interactive API documentation:
-
-`https://genhealth-assessment-s9gx.onrender.com/docs`
-
 Health check:
 
 `GET /health`
@@ -192,7 +182,7 @@ The PATCH endpoint currently includes basic request validation. With more time, 
 ## Project Structure
 
 ```text
-genhealth-assessment/
+patient-order-intake/
 ├── main.py
 ├── database.py
 ├── models.py

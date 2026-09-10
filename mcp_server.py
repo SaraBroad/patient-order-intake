@@ -13,7 +13,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
     title="Upload Document",
     description=(
         "Upload a PDF document and extract patient information from it. "
-        "Reads the PDF at the given path, sends it to the GenHealth backend, "
+        "Reads the PDF at the given path, sends it to the Patient Order Intake backend, "
         "which uses AI to extract the patient's first name, last name, and "
         "date of birth. Persists an order record and returns all extracted "
         "patient data."
