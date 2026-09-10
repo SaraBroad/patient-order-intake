@@ -547,6 +547,10 @@ body {
   margin-top: var(--space-5);
 }
 
+.extracted-card .form-input {
+  background: var(--color-surface);
+}
+
 .saved-badge {
   display: inline-flex;
   align-items: center;

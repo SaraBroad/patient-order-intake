@@ -8,6 +8,7 @@ interface UseUploadReturn {
   feedback: Feedback | null;
   dismissFeedback: () => void;
   order: Order | null;
+  replaceOrder: (next: Order) => void;
 }
 
 export function useUpload(onSuccess?: () => void): UseUploadReturn {
@@ -51,5 +52,6 @@ export function useUpload(onSuccess?: () => void): UseUploadReturn {
     feedback,
     dismissFeedback: () => setFeedback(null),
     order,
+    replaceOrder: setOrder,
   };
 }

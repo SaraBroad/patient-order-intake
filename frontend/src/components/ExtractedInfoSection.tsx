@@ -1,5 +1,8 @@
-import type { Order } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import type { Order, OrderUpdatePayload } from "../types";
+import Alert from "./Alert";
 import SectionCard from "./SectionCard";
+import Spinner from "./Spinner";
 
 function AiBadge() {
   return (
@@ -33,10 +36,79 @@ function FieldItem({ label, value }: FieldItemProps) {
 
 interface ExtractedInfoSectionProps {
   data: Order | null;
+  onSave: (payload: OrderUpdatePayload) => Promise<void>;
+  isSaving: boolean;
+  saveError: string | null;
+  onDismissSaveError: () => void;
 }
 
-export default function ExtractedInfoSection({ data }: ExtractedInfoSectionProps) {
+export default function ExtractedInfoSection({
+  data,
+  onSave,
+  isSaving,
+  saveError,
+  onDismissSaveError,
+}: ExtractedInfoSectionProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+
+  useEffect(() => {
+    if (!data) return;
+    setIsEditing(false);
+    setFirstName(data.patient_first_name);
+    setLastName(data.patient_last_name);
+    setDateOfBirth(data.patient_date_of_birth);
+  }, [
+    data?.id,
+    data?.patient_first_name,
+    data?.patient_last_name,
+    data?.patient_date_of_birth,
+  ]);
+
+  const isDirty = useMemo(() => {
+    if (!data) return false;
+    return (
+      firstName.trim() !== data.patient_first_name ||
+      lastName.trim() !== data.patient_last_name ||
+      dateOfBirth !== data.patient_date_of_birth
+    );
+  }, [data, firstName, lastName, dateOfBirth]);
+
+  const canSave =
+    isDirty &&
+    firstName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
+    dateOfBirth.length > 0 &&
+    !isSaving;
+
   if (!data) return null;
+
+  function handleCancel() {
+    setFirstName(data.patient_first_name);
+    setLastName(data.patient_last_name);
+    setDateOfBirth(data.patient_date_of_birth);
+    setIsEditing(false);
+    onDismissSaveError();
+  }
+
+  async function handleSave() {
+    if (!canSave) return;
+
+    const payload: OrderUpdatePayload = {};
+    if (firstName.trim() !== data.patient_first_name) {
+      payload.patient_first_name = firstName.trim();
+    }
+    if (lastName.trim() !== data.patient_last_name) {
+      payload.patient_last_name = lastName.trim();
+    }
+    if (dateOfBirth !== data.patient_date_of_birth) {
+      payload.patient_date_of_birth = dateOfBirth;
+    }
+
+    await onSave(payload);
+  }
 
   return (
     <SectionCard
@@ -45,10 +117,101 @@ export default function ExtractedInfoSection({ data }: ExtractedInfoSectionProps
       badge={<AiBadge />}
       className="extracted-card"
     >
-      <div className="field-grid">
-        <FieldItem label="First Name" value={data.patient_first_name} />
-        <FieldItem label="Last Name" value={data.patient_last_name} />
-        <FieldItem label="Date of Birth" value={data.patient_date_of_birth} />
+      {isEditing ? (
+        <div className="order-form">
+          <div className="form-group">
+            <label className="form-label" htmlFor="extracted-first-name">
+              First Name
+            </label>
+            <input
+              id="extracted-first-name"
+              className="form-input"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              disabled={isSaving}
+              autoComplete="given-name"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="extracted-last-name">
+              Last Name
+            </label>
+            <input
+              id="extracted-last-name"
+              className="form-input"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              disabled={isSaving}
+              autoComplete="family-name"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="extracted-dob">
+              Date of Birth
+            </label>
+            <input
+              id="extracted-dob"
+              className="form-input"
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="field-grid">
+          <FieldItem label="First Name" value={data.patient_first_name} />
+          <FieldItem label="Last Name" value={data.patient_last_name} />
+          <FieldItem label="Date of Birth" value={data.patient_date_of_birth} />
+        </div>
+      )}
+
+      {saveError && (
+        <div className="upload-feedback">
+          <Alert variant="error" message={saveError} onDismiss={onDismissSaveError} />
+        </div>
+      )}
+
+      <div className="order-form-actions">
+        {isEditing ? (
+          <>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={handleCancel}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => void handleSave()}
+              disabled={!canSave}
+            >
+              {isSaving ? (
+                <>
+                  <Spinner />
+                  Saving…
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => {
+              onDismissSaveError();
+              setIsEditing(true);
+            }}
+          >
+            Edit
+          </button>
+        )}
       </div>
     </SectionCard>
   );
