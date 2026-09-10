@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from schemas import OrderResponse, OrderUpdate
+from schemas import DuplicatePatientCluster, OrderResponse, OrderUpdate
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 from models import Order
-from schemas import OrderResponse
 from services.order_service import create_order_from_document
 from services.activity_logger import log_activity
+from services.duplicate_clusters import find_duplicate_patient_clusters
 
 router = APIRouter()
 
@@ -25,6 +25,20 @@ def get_orders(db: Session = Depends(get_db)):
     )
 
     return orders
+
+
+@router.get("/duplicates", response_model=list[DuplicatePatientCluster])
+def get_duplicate_patient_clusters(db: Session = Depends(get_db)):
+    orders = db.scalars(select(Order)).all()
+
+    log_activity(
+        db=db,
+        action="ORDER_DUPLICATES_VIEWED",
+        method="GET",
+        path="/api/v1/orders/duplicates",
+    )
+
+    return find_duplicate_patient_clusters(orders)
 
 
 @router.get("/{order_id}", response_model=OrderResponse)

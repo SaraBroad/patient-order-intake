@@ -18,6 +18,14 @@ class ExtractedPatientData(BaseModel):
     last_name: str
     date_of_birth: date
 
+class DuplicatePatientCluster(BaseModel):
+    patient_first_name: str
+    patient_last_name: str
+    patient_date_of_birth: date
+    count: int
+    order_ids: list[int]
+
+
 class OrderUpdate(BaseModel):
     patient_first_name: str | None = Field(
         default=None,
